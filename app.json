@@ -61,8 +61,7 @@
           "microphonePermission": false
         }
       ],
-      "expo-asset",
-      "expo-font"
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
