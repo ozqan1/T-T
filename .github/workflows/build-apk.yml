@@ -19,7 +19,7 @@ jobs:
     name: Build installable APK
     runs-on: ubuntu-latest
     env:
-      GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+HeapDumpOnOutOfMemoryError"
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,28 +44,36 @@ jobs:
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install
 
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
-
-      - name: Build debug APK
-        working-directory: android
+      - name: Debug Gradle files
         run: |
-          ./gradlew assembleDebug --no-daemon -x lint 2>&1 | tee /tmp/build.log
-          echo "=== APK Directory ==="
-          find . -name "*.apk" 2>/dev/null
+          echo "=== android/ ==="
+          ls -la android/
+          echo ""
+          echo "=== gradle.properties ==="
+          cat android/gradle.properties 2>/dev/null || echo "Not found"
 
-      - name: Rename APK
+      - name: Build APK
+        working-directory: android
+        env:
+          JAVA_HOME: /opt/java/openjdk
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease -x lint --no-daemon 2>&1 | tee /tmp/gradle.log
+
+      - name: Find and copy APK
         run: |
           mkdir -p dist
-          APK_PATH=$(find android -name "*.apk" 2>/dev/null | head -1)
-          
+          echo "=== Looking for APK ==="
+          find android -name "*.apk" 2>/dev/null
+          echo ""
+          APK_PATH=$(find android -name "*.apk" 2>/dev/null | grep -v instant | head -1)
           if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
-            echo "Found APK: $APK_PATH"
+            echo "Copying: $APK_PATH"
             cp "$APK_PATH" "dist/AkrepIndirici-v10.9.0.apk"
             ls -la dist/
           else
-            echo "ERROR: No APK found"
-            cat /tmp/build.log | tail -50
+            echo "=== Gradle log tail ==="
+            tail -100 /tmp/gradle.log
             exit 1
           fi
 
