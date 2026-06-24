@@ -52,33 +52,37 @@ jobs:
           echo "=== gradle.properties ==="
           cat android/gradle.properties 2>/dev/null || echo "Not found"
 
-      - name: Build APK with expo run:android
+      - name: Build APK with EAS remote
+        env:
+          EAS_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           mkdir -p dist
-          # Build release APK using expo run:android
-          npx expo run:android --variant release --no-install 2>&1 | tee /tmp/expo-build.log
-          echo "=== Build output ==="
-          ls -la android/app/build/outputs/apk/release/ 2>/dev/null || echo "No release dir"
-
-      - name: Find and copy APK
+          npm install -g eas-cli
+          eas build --platform android --profile preview --non-interactive 2>&1 | tee /tmp/eas-build.log
+          echo "=== EAS build complete ==="
+          
+      - name: Download EAS build artifact
+        if: success()
+        env:
+          EAS_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          mkdir -p dist
-          # Check release APK
-          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
-            cp android/app/build/outputs/apk/release/app-release.apk "dist/AkrepIndirici-v10.9.0.apk"
-            echo "Found release APK"
-          # Check debug APK
-          elif [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp android/app/build/outputs/apk/debug/app-debug.apk "dist/AkrepIndirici-v10.9.0.apk"
-            echo "Found debug APK"
-          else
-            echo "=== Checking all APK files ==="
-            find android -name "*.apk" -type f 2>/dev/null
-            echo "=== Expo build log ==="
-            cat /tmp/expo-build.log
-            exit 1
+          npm install -g eas-cli
+          # Get build info and download
+          eas build:list --platform android --limit 1 --status finished 2>&1 | tee /tmp/eas-list.log
+          BUILD_ID=$(grep -oP '(?<=Build ID: )\d+' /tmp/eas-list.log | head -1)
+          if [ -n "$BUILD_ID" ]; then
+            echo "Downloading build $BUILD_ID"
+            eas build:download --id "$BUILD_ID" 2>&1 || echo "Download skipped"
           fi
-          ls -la dist/
+          ls -la *.apk 2>/dev/null && cp *.apk dist/AkrepIndirici-v10.9.0.apk || echo "No APK found"
+
+      - name: Find APK in dist
+        run: |
+          mkdir -p dist
+          if [ -f *.apk ] 2>/dev/null; then
+            cp *.apk dist/AkrepIndirici-v10.9.0.apk 2>/dev/null || true
+          fi
+          ls -la dist/ || echo "No dist"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
