@@ -2,24 +2,15 @@ name: Build Android APK
 
 on:
   push:
-    branches:
-      - "**"
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
 
-concurrency:
-  group: build-apk-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
-    name: Build installable APK
+    name: Build APK
     runs-on: ubuntu-latest
-    env:
-      GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,78 +32,35 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Generate native Android project
+      - name: Generate Android project
         run: npx expo prebuild --platform android --no-install
 
-      - name: Debug Gradle files
+      - name: Export bundle
         run: |
-          echo "=== android/ ==="
-          ls -la android/
-          echo ""
-          echo "=== gradle.properties ==="
-          cat android/gradle.properties 2>/dev/null || echo "Not found"
-
-      - name: Build APK with standalone Gradle
-        working-directory: android
-        env:
-          JAVA_HOME: /opt/java/openjdk
-        run: |
-          # Create assets directory if it doesn't exist
-          mkdir -p app/src/main/assets
-          
-          # Bundle JS into assets
+          mkdir -p android/app/src/main/assets
           npx react-native bundle \
             --platform android \
             --dev false \
-            --entry-file index.js \
-            --bundle-output app/src/main/assets/index.android.bundle \
-            --assets-dest app/src/main/res/ 2>&1 | tee /tmp/bundle.log
-          
-          echo "=== Bundle created ==="
-          ls -la app/src/main/assets/
-          
-          # Build debug APK (simpler than release)
-          ./gradlew assembleDebug --no-daemon -x lint 2>&1 | tee /tmp/gradle.log
+            --entry-file node_modules/expo-router/entry.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
 
-      - name: Find and copy APK
-        run: |
-          mkdir -p dist
-          # Find any APK
-          APK_PATH=""
-          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
-            APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
-          elif [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
-            APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
-          fi
-          
-          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
-            echo "Found APK: $APK_PATH"
-            cp "$APK_PATH" "dist/AkrepIndirici-v10.9.0.apk"
-            ls -la dist/
-          else
-            echo "=== Gradle log tail ==="
-            tail -150 /tmp/gradle.log
-            exit 1
-          fi
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon -x lint
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AkrepIndirici-APK
-          path: dist/AkrepIndirici-v10.9.0.apk
-          if-no-files-found: error
+          path: android/app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Publish downloadable release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
-          name: Akrep İndirici APK (build ${{ github.run_number }})
-          body: |
-            TİT 🦂 — Akrep İndirici otomatik derlenmiş APK.
-
-            Telefonunuza kurmak için APK dosyasını indirip açın.
-            (Ayarlar > Bilinmeyen kaynaklara izin vermeniz gerekebilir.)
-          prerelease: true
-          files: dist/*.apk
+          tag_name: v10.9.0-apk
+          name: TİT Akrep İndirici v10.9.0 APK
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          body: "Telefonunuza kurmak için APK'yı indirin."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
