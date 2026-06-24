@@ -52,28 +52,34 @@ jobs:
           echo "=== gradle.properties ==="
           cat android/gradle.properties 2>/dev/null || echo "Not found"
 
-      - name: Build APK
-        working-directory: android
-        env:
-          JAVA_HOME: /opt/java/openjdk
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease -x lint --no-daemon 2>&1 | tee /tmp/gradle.log
-
-      - name: Find and copy APK
+      - name: Build APK with expo
         run: |
           mkdir -p dist
-          echo "=== Looking for APK ==="
-          find android -name "*.apk" 2>/dev/null
+          npx expo export --platform android 2>&1 | tee /tmp/expo-export.log
+          echo "=== Expo export complete ==="
+          ls -la dist/ 2>/dev/null || echo "No dist dir"
+
+      - name: Find and create APK
+        run: |
+          mkdir -p dist
+          # Check for bundled assets
+          echo "=== Checking dist/ ==="
+          ls -la dist/ 2>/dev/null
           echo ""
-          APK_PATH=$(find android -name "*.apk" 2>/dev/null | grep -v instant | head -1)
+          echo "=== Checking android/app/build/ ==="
+          find android/app/build -type f -name "*.apk" 2>/dev/null || echo "No APK found"
+          echo ""
+          echo "=== Checking android/app/build/outputs/apk/ ==="
+          find android/app/build/outputs -type f 2>/dev/null | head -20 || echo "No outputs"
+          
+          # Try to find any APK
+          APK_PATH=$(find . -type f -name "*.apk" 2>/dev/null | grep -v node_modules | head -1)
           if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
-            echo "Copying: $APK_PATH"
+            echo "Found APK: $APK_PATH"
             cp "$APK_PATH" "dist/AkrepIndirici-v10.9.0.apk"
-            ls -la dist/
           else
-            echo "=== Gradle log tail ==="
-            tail -100 /tmp/gradle.log
+            echo "=== Expo export log ==="
+            tail -50 /tmp/expo-export.log
             exit 1
           fi
 
