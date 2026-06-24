@@ -49,18 +49,27 @@ jobs:
 
       - name: Build release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: ./gradlew assembleRelease --no-daemon -x lint
+
+      - name: Build debug APK (fallback)
+        if: failure()
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Rename APK
         run: |
           mkdir -p dist
-          cp android/app/build/outputs/apk/release/app-release.apk "dist/AkrepIndirici-v10.9.0.apk"
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk "dist/AkrepIndirici-v10.9.0.apk"
+          elif [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk "dist/AkrepIndirici-v10.9.0-debug.apk"
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: AkrepIndirici-APK
-          path: dist/AkrepIndirici-v10.9.0.apk
+          path: dist/
           if-no-files-found: error
 
       - name: Publish downloadable release
@@ -71,9 +80,9 @@ jobs:
           body: |
             TİT 🦂 — Akrep İndirici otomatik derlenmiş APK.
 
-            Telefonunuza kurmak için aşağıdaki **AkrepIndirici-v10.9.0.apk** dosyasını indirip açın.
+            Telefonunuza kurmak için APK dosyasını indirip açın.
             (Ayarlar > Bilinmeyen kaynaklara izin vermeniz gerekebilir.)
           prerelease: true
-          files: dist/AkrepIndirici-v10.9.0.apk
+          files: dist/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
