@@ -52,34 +52,26 @@ jobs:
           echo "=== gradle.properties ==="
           cat android/gradle.properties 2>/dev/null || echo "Not found"
 
-      - name: Build APK with expo
+      - name: Build APK with EAS
         run: |
-          mkdir -p dist
-          npx expo export --platform android 2>&1 | tee /tmp/expo-export.log
-          echo "=== Expo export complete ==="
-          ls -la dist/ 2>/dev/null || echo "No dist dir"
+          npm install -g eas-cli
+          eas build --platform android --local --profile preview 2>&1 | tee /tmp/eas-build.log
+          echo "=== EAS build complete ==="
+          ls -la ./*.apk 2>/dev/null || echo "No APK in root"
+          find . -name "*.apk" -type f 2>/dev/null | head -5
 
-      - name: Find and create APK
+      - name: Find and copy APK
         run: |
           mkdir -p dist
-          # Check for bundled assets
-          echo "=== Checking dist/ ==="
-          ls -la dist/ 2>/dev/null
-          echo ""
-          echo "=== Checking android/app/build/ ==="
-          find android/app/build -type f -name "*.apk" 2>/dev/null || echo "No APK found"
-          echo ""
-          echo "=== Checking android/app/build/outputs/apk/ ==="
-          find android/app/build/outputs -type f 2>/dev/null | head -20 || echo "No outputs"
-          
-          # Try to find any APK
+          # Find any APK
           APK_PATH=$(find . -type f -name "*.apk" 2>/dev/null | grep -v node_modules | head -1)
           if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
             echo "Found APK: $APK_PATH"
             cp "$APK_PATH" "dist/AkrepIndirici-v10.9.0.apk"
+            ls -la dist/
           else
-            echo "=== Expo export log ==="
-            tail -50 /tmp/expo-export.log
+            echo "=== EAS build log tail ==="
+            tail -100 /tmp/eas-build.log
             exit 1
           fi
 
