@@ -47,30 +47,25 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build release APK
+      - name: Build debug APK
         working-directory: android
         run: |
-          ./gradlew assembleRelease --no-daemon -x lint
+          ./gradlew assembleDebug --no-daemon -x lint 2>&1 | tee /tmp/build.log
           echo "=== APK Directory ==="
-          ls -laR app/build/outputs/apk/ 2>/dev/null || echo "No APK directory found"
+          find . -name "*.apk" 2>/dev/null
 
       - name: Rename APK
         run: |
           mkdir -p dist
-          APK_PATH=""
-          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
-            APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
-          elif [ -f android/app/build/outputs/apk/release/*.apk ]; then
-            APK_PATH=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
-          fi
+          APK_PATH=$(find android -name "*.apk" 2>/dev/null | head -1)
           
           if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
             echo "Found APK: $APK_PATH"
             cp "$APK_PATH" "dist/AkrepIndirici-v10.9.0.apk"
             ls -la dist/
           else
-            echo "ERROR: No APK found in expected location"
-            find android -name "*.apk" 2>/dev/null || echo "No APK files found"
+            echo "ERROR: No APK found"
+            cat /tmp/build.log | tail -50
             exit 1
           fi
 
