@@ -52,37 +52,48 @@ jobs:
           echo "=== gradle.properties ==="
           cat android/gradle.properties 2>/dev/null || echo "Not found"
 
-      - name: Build APK with EAS remote
+      - name: Build APK with standalone Gradle
+        working-directory: android
         env:
-          EAS_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          JAVA_HOME: /opt/java/openjdk
         run: |
-          mkdir -p dist
-          npm install -g eas-cli
-          eas build --platform android --profile preview --non-interactive 2>&1 | tee /tmp/eas-build.log
-          echo "=== EAS build complete ==="
+          # Create assets directory if it doesn't exist
+          mkdir -p app/src/main/assets
           
-      - name: Download EAS build artifact
-        if: success()
-        env:
-          EAS_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: |
-          npm install -g eas-cli
-          # Get build info and download
-          eas build:list --platform android --limit 1 --status finished 2>&1 | tee /tmp/eas-list.log
-          BUILD_ID=$(grep -oP '(?<=Build ID: )\d+' /tmp/eas-list.log | head -1)
-          if [ -n "$BUILD_ID" ]; then
-            echo "Downloading build $BUILD_ID"
-            eas build:download --id "$BUILD_ID" 2>&1 || echo "Download skipped"
-          fi
-          ls -la *.apk 2>/dev/null && cp *.apk dist/AkrepIndirici-v10.9.0.apk || echo "No APK found"
+          # Bundle JS into assets
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output app/src/main/assets/index.android.bundle \
+            --assets-dest app/src/main/res/ 2>&1 | tee /tmp/bundle.log
+          
+          echo "=== Bundle created ==="
+          ls -la app/src/main/assets/
+          
+          # Build debug APK (simpler than release)
+          ./gradlew assembleDebug --no-daemon -x lint 2>&1 | tee /tmp/gradle.log
 
-      - name: Find APK in dist
+      - name: Find and copy APK
         run: |
           mkdir -p dist
-          if [ -f *.apk ] 2>/dev/null; then
-            cp *.apk dist/AkrepIndirici-v10.9.0.apk 2>/dev/null || true
+          # Find any APK
+          APK_PATH=""
+          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          elif [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
           fi
-          ls -la dist/ || echo "No dist"
+          
+          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
+            echo "Found APK: $APK_PATH"
+            cp "$APK_PATH" "dist/AkrepIndirici-v10.9.0.apk"
+            ls -la dist/
+          else
+            echo "=== Gradle log tail ==="
+            tail -150 /tmp/gradle.log
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
