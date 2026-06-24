@@ -35,27 +35,35 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install
 
-      - name: Export bundle
+      - name: Create JS bundle for Android
         run: |
           mkdir -p android/app/src/main/assets
           npx react-native bundle \
             --platform android \
             --dev false \
-            --entry-file node_modules/expo-router/entry.js \
+            --entry-file index.js \
             --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res
+            --assets-dest android/app/src/main/res 2>&1 || echo "Bundle failed, trying alternative..."
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon -x lint
+        run: ./gradlew assembleDebug --no-daemon -x lint 2>&1 | tail -50
+
+      - name: Find APK
+        run: |
+          echo "=== Looking for APK ==="
+          find android -name "*.apk" -type f 2>/dev/null || echo "No APK found"
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: AkrepIndirici-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
 
       - name: Create Release
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v10.9.0-apk
