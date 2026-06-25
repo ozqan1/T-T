@@ -2,6 +2,7 @@ name: EAS Build Android APK
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -9,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build APK
+    name: Build APK with EAS
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Configure EAS Build
+      - name: Configure EAS
         run: |
           cat > eas.json << 'EOF'
           {
@@ -34,82 +35,43 @@ jobs:
               "version": ">= 5.0.0"
             },
             "build": {
-              "development": {
-                "developmentClient": true,
-                "distribution": "internal"
-              },
               "preview": {
                 "distribution": "internal",
                 "android": {
                   "buildType": "apk"
                 }
-              },
-              "production": {
-                "android": {
-                  "buildType": "apk"
-                }
               }
-            },
-            "submit": {
-              "android": {}
             }
           }
           EOF
-          cat eas.json
 
-      - name: Build with EAS
-        run: |
-          echo "=== Building with EAS ==="
-          eas build --platform android --profile preview --non-interactive --no-wait
-          echo "=== Build started! ==="
+      - name: Login to Expo
+        run: eas login --token ${{ secrets.EXPO_TOKEN }}
 
-      - name: Wait for EAS build
+      - name: Build Android APK
         run: |
-          echo "=== Waiting for build to complete ==="
-          BUILD_ID=$(eas build:list --limit 1 --json 2>/dev/null | python3 -c "import sys,json; data=json.load(sys.stdin); print(data[0]['id'] if data else '')" || echo "")
-          echo "Build ID: $BUILD_ID"
-          
-          # Poll for build status
-          for i in {1..60}; do
-            STATUS=$(eas build:list --limit 1 --json 2>/dev/null | python3 -c "import sys,json; data=json.load(sys.stdin); print(data[0]['status'] if data else 'UNKNOWN')" || echo "UNKNOWN")
-            echo "Status: $STATUS (attempt $i/60)"
-            if [ "$STATUS" = "finished" ]; then
-              echo "=== Build finished! ==="
-              break
-            elif [ "$STATUS" = "errored" ]; then
-              echo "=== Build failed! ==="
-              exit 1
-            fi
-            sleep 60
-          done
+          echo "=== Starting EAS Build ==="
+          eas build --platform android --profile preview --non-interactive 2>&1 | tee /tmp/eas.log
+          EXIT_CODE=$?
+          echo ""
+          echo "=== EAS Build Exit Code: $EXIT_CODE ==="
+          tail -100 /tmp/eas.log
+          exit $EXIT_CODE
 
-      - name: Download APK
+      - name: Get Build Info
         run: |
-          echo "=== Getting APK URL ==="
-          # Get build details
-          BUILD_JSON=$(eas build:list --limit 1 --json)
-          echo "$BUILD_JSON" | python3 -c "
-import sys,json
-data = json.load(sys.stdin)
-if data:
-    build = data[0]
-    print(f'Build ID: {build.get(\"id\")}')
-    print(f'Status: {build.get(\"status\")}')
-    artifacts = build.get('artifacts', {})
-    if artifacts:
-        print(f'APK URL: {artifacts.get(\"url\", \"Not available\")}')
-    else:
-        print('No artifacts yet')
-"
-
-      - name: Create Release with APK
-        if: success()
-        run: |
-          echo "=== Creating GitHub Release ==="
+          echo "=== Getting build information ==="
           eas build:list --limit 1
           echo ""
-          echo "Build completed! Please download the APK from EAS:"
-          echo "1. Go to https://expo.dev/accounts/ozqan1/projects"
-          echo "2. Download your build APK"
-          echo ""
-          echo "Or run: eas build:download --latest"
+          echo "=== If build succeeded, download with: ==="
+          echo "eas build:download --latest --platform android"
+
+      - name: Create Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v10.9.0-eas
+          name: TİT Akrep İndirici v10.9.0 APK (EAS)
+          body: "EAS Build ile oluşturuldu. APK'yı https://expo.dev/accounts/ozqan1/projects adresinden indirin."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
