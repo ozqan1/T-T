@@ -58,14 +58,21 @@ jobs:
           ANDROID_HOME: /opt/android-sdk
         run: |
           ./gradlew assembleDebug --no-daemon --warning-mode all 2>&1 | tee /tmp/gradle.log
-          echo "=== Gradle build result ==="
-          tail -80 /tmp/gradle.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "=== Gradle build EXIT CODE: $EXIT_CODE ==="
+          echo "=== Last 100 lines of log ==="
+          tail -100 /tmp/gradle.log
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "=== Gradle build FAILED ==="
+            exit 1
+          fi
+          echo "=== Gradle build SUCCEEDED ==="
 
       - name: Find and copy APK
         run: |
           mkdir -p dist
           echo "=== Checking all outputs ==="
-          find android -name "*.apk" -type f 2>/dev/null
+          find android -name "*.apk" -type f 2>/dev/null || echo "No APK found"
           echo ""
           echo "=== Checking standard paths ==="
           ls -la android/app/build/outputs/apk/ 2>/dev/null || echo "No apk dir"
@@ -78,10 +85,8 @@ jobs:
           elif [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
             cp android/app/build/outputs/apk/release/app-release.apk dist/AkrepIndirici-v10.9.0.apk
           else
-            echo "=== Last 200 lines of gradle log ==="
-            tail -200 /tmp/gradle.log
             echo "=== Listing all files in build dir ==="
-            find android/app/build -type f 2>/dev/null | head -30
+            find android/app/build -type f 2>/dev/null | head -50
             exit 1
           fi
           echo "=== APK copied ==="
