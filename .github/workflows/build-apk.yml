@@ -56,12 +56,23 @@ jobs:
         env:
           JAVA_HOME: /opt/java/openjdk
           ANDROID_HOME: /opt/android-sdk
+          PATH: $JAVA_HOME/bin:$PATH
         run: |
-          ./gradlew assembleDebug --no-daemon --warning-mode all 2>&1 | tee /tmp/gradle.log
+          echo "=== Checking gradlew ==="
+          ls -la gradlew
+          file gradlew
+          head -5 gradlew
+          echo ""
+          echo "=== Making gradlew executable ==="
+          chmod +x gradlew
+          echo ""
+          echo "=== Running gradle build ==="
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
           EXIT_CODE=${PIPESTATUS[0]}
+          echo ""
           echo "=== Gradle build EXIT CODE: $EXIT_CODE ==="
-          echo "=== Last 100 lines of log ==="
-          tail -100 /tmp/gradle.log
+          echo "=== Full log tail ==="
+          tail -200 /tmp/gradle.log
           if [ $EXIT_CODE -ne 0 ]; then
             echo "=== Gradle build FAILED ==="
             exit 1
