@@ -81,6 +81,6 @@ jobs:
         with:
           tag_name: v10.9.0-eas
           name: TİT Akrep İndirici v10.9.0 APK (EAS)
-          body: "EAS Build ile oluşturuldu. APK'yı https://expo.dev/accounts/ozqan1/projects adresinden indirin."
+          body: "EAS Build ile oluşturuldu. APK'yı https://expo.dev/accounts/akrepp11/projects adresinden indirin."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
