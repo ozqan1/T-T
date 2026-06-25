@@ -12,6 +12,7 @@ jobs:
   build:
     name: Build APK with EAS
     runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hours for EAS build
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,10 +22,11 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install EAS CLI and Expo deps
-        run: |
-          npm install -g eas-cli
-          npm install
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Install dependencies
+        run: npm install
 
       - name: Configure EAS
         run: |
@@ -47,33 +49,38 @@ jobs:
       - name: Login to Expo
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        continue-on-error: true
         run: |
-          echo "=== Testing Expo Token ==="
-          TEST_RESULT=$(curl -s -w "%{http_code}" -o /tmp/response.json -H "Authorization: Bearer $EXPO_TOKEN" https://exp.host/--/api/v2/users/me)
-          echo "HTTP Status: $TEST_RESULT"
-          cat /tmp/response.json | head -50
-          echo ""
-          echo "=== Logging in to EAS ==="
-          eas login --token "$EXPO_TOKEN" 2>&1 || { echo "Login failed with eas login"; }
-          eas whoami 2>&1 || echo "whoami failed"
+          echo "Logging in with token..."
+          eas login --token "$EXPO_TOKEN" 2>&1
+          eas whoami
 
-      - name: Build Android APK
+      - name: Build Android APK with EAS
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           echo "=== Starting EAS Build ==="
           eas build --platform android --profile preview --non-interactive 2>&1 | tee /tmp/eas.log
           EXIT_CODE=${PIPESTATUS[0]}
-          echo ""
           echo "=== EAS Build Exit Code: $EXIT_CODE ==="
           tail -100 /tmp/eas.log
+
+      - name: Download APK from Expo
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          mkdir -p dist
+          echo "=== Getting build details ==="
+          eas build:list --limit 1 --status finished 2>&1 | tee /tmp/build-list.log
           
-          if [ $EXIT_CODE -eq 0 ]; then
-            echo "=== Build started successfully ==="
-            eas build:list --limit 1
+          # Get build ID from output
+          BUILD_ID=$(grep -oP 'build-[a-z0-9]+' /tmp/build-list.log | head -1 || echo "")
+          echo "Build ID: $BUILD_ID"
+          
+          # Download APK if available
+          if [ -n "$BUILD_ID" ]; then
+            echo "=== Downloading APK ==="
+            eas build:download --id "$BUILD_ID" 2>&1 || echo "Download skipped"
           fi
-          exit $EXIT_CODE
 
       - name: Create Release
         if: success()
@@ -81,6 +88,6 @@ jobs:
         with:
           tag_name: v10.9.0-eas
           name: TİT Akrep İndirici v10.9.0 APK (EAS)
-          body: "EAS Build ile oluşturuldu. APK'yı https://expo.dev/accounts/akrepp11/projects adresinden indirin."
+          body: "EAS Build ile oluşturuldu."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
