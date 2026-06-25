@@ -33,10 +33,25 @@ jobs:
         run: npm install
 
       - name: Generate Android native project
+        env:
+          ANDROID_HOME: /opt/android-sdk
+          ANDROID_SDK_ROOT: /opt/android-sdk
         run: |
-          npx expo prebuild --platform android --no-install 2>&1 | tee /tmp/prebuild.log
+          echo "=== Prebuild starting ==="
+          echo "Node version: $(node --version)"
+          echo "NPM version: $(npm --version)"
+          echo ""
+          npx expo prebuild --platform android --no-install --clean 2>&1 | tee /tmp/prebuild.log
           echo "=== Prebuild completed ==="
-          cat /tmp/prebuild.log | tail -30
+          cat /tmp/prebuild.log | tail -50
+          echo ""
+          echo "=== Checking android folder ==="
+          ls -la android/ 2>/dev/null || echo "No android folder!"
+          ls -la android/gradlew 2>/dev/null || echo "No gradlew!"
+          echo ""
+          echo "=== SDK check ==="
+          ls -la /opt/android-sdk/ 2>/dev/null || echo "No SDK at /opt/android-sdk/"
+          ls -la $ANDROID_HOME/ 2>/dev/null || echo "No SDK at ANDROID_HOME"
 
       - name: Create JS bundle
         run: |
