@@ -36,35 +36,14 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Generate Android project
-        run: |
-          export ANDROID_HOME=/opt/android-sdk
-          export ANDROID_SDK_ROOT=/opt/android-sdk
-          export JAVA_HOME=/opt/java/openjdk
-          export PATH=$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
-
-          npx expo prebuild --platform android --no-install --clean 2>&1 | tee /tmp/prebuild.log
-          EXIT_CODE=${PIPESTATUS[0]}
-          tail -30 /tmp/prebuild.log
-          
-          [ -f android/gradlew ] && echo "✅ Prebuild OK" || { echo "❌ Prebuild FAILED"; exit 1; }
-
-      - name: Create JS Bundle
+      - name: Prebuild Android
         run: |
           export ANDROID_HOME=/opt/android-sdk
           export ANDROID_SDK_ROOT=/opt/android-sdk
           export JAVA_HOME=/opt/java/openjdk
           export PATH=$JAVA_HOME/bin:$PATH
-          
-          mkdir -p android/app/src/main/assets
-          
-          npx expo export:embed --platform android --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res 2>&1 | tee /tmp/bundle.log
-          
-          EXIT_CODE=${PIPESTATUS[0]}
-          echo "=== Bundle exit code: $EXIT_CODE ==="
-          tail -30 /tmp/bundle.log
-          
-          [ -f android/app/src/main/assets/index.android.bundle ] && echo "✅ Bundle created!" || { echo "❌ Bundle failed!"; exit 1; }
+
+          npx expo prebuild --platform android --no-install --clean 2>&1
 
       - name: Build Debug APK
         run: |
@@ -76,27 +55,41 @@ jobs:
           cd android
           chmod +x gradlew
 
-          ./gradlew assembleDebug --no-daemon 2>&1 | tee /tmp/gradle.log
+          # Build with verbose output
+          ./gradlew assembleDebug --no-daemon --info 2>&1 | tee /tmp/gradle.log
+          
           EXIT_CODE=${PIPESTATUS[0]}
-
-          echo "=== Build result: $EXIT_CODE ==="
-          tail -50 /tmp/gradle.log
+          echo "=== Gradle Exit Code: $EXIT_CODE ==="
+          
+          # List all files created
+          echo "=== All build outputs ==="
+          find . -type f -name "*.apk" 2>/dev/null
+          find . -type d -name "outputs" 2>/dev/null
+          ls -laR app/build/outputs/ 2>/dev/null || echo "No outputs dir"
 
       - name: Find APK
         run: |
           mkdir -p dist
-
-          echo "=== Searching for APKs ==="
-          find android -name "*.apk" -type f 2>/dev/null
-
-          APK=$(find android -name "*.apk" -type f | head -1)
+          
+          echo "=== Searching ALL directories for APK ==="
+          find / -name "*.apk" -type f 2>/dev/null | head -20 || echo "No APK found"
+          
+          # Search in common locations
+          echo "=== Check common locations ==="
+          ls -la android/app/build/outputs/apk/debug/ 2>/dev/null || echo "No debug APK dir"
+          ls -la android/app/build/outputs/apk/ 2>/dev/null || echo "No apk dir"
+          ls -la android/app/build/outputs/ 2>/dev/null || echo "No outputs dir"
+          
+          # Find first APK
+          APK=$(find android -name "*.apk" -type f 2>/dev/null | head -1)
           if [ -n "$APK" ] && [ -f "$APK" ]; then
-            cp "$APK" dist/AkrepIndirici-v10.9.0.apk
+            echo "Found: $APK"
+            cp "$APK" dist/app.apk
             ls -la dist/
-            echo "✅ APK ready: $APK"
           else
-            echo "❌ No APK found!"
-            find android/app/build -type f 2>/dev/null | head -30
+            echo "=== DEBUG: List android/app/build ==="
+            find android/app/build -type f 2>/dev/null | head -50
+            echo "=== No APK found! ==="
             exit 1
           fi
 
@@ -104,7 +97,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AkrepIndirici-APK
-          path: dist/AkrepIndirici-v10.9.0.apk
+          path: dist/app.apk
           if-no-files-found: error
 
       - name: Create Release
@@ -112,7 +105,7 @@ jobs:
         with:
           tag_name: v10.9.0-apk
           name: TİT Akrep İndirici v10.9.0 APK
-          files: dist/AkrepIndirici-v10.9.0.apk
+          files: dist/app.apk
           body: "Telefonunuza kurmak için APK'yı indirin."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
