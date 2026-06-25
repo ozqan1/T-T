@@ -32,50 +32,28 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Generate Android project
-        run: npx expo prebuild --platform android --no-install
-
-      - name: Create JS bundle for Android
+      - name: Build with expo run:android
         run: |
-          mkdir -p android/app/src/main/assets
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res 2>&1 || echo "Bundle failed, trying alternative..."
+          npx expo run:android --variant release --no-install --no-bundler 2>&1 | tee /tmp/expo-build.log
+          echo "=== Build finished ==="
+          cat /tmp/expo-build.log | tail -100
 
-      - name: Build debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug --no-daemon -x lint 2>&1 | tail -50
-
-      - name: Find and copy APK
+      - name: Find APK
         run: |
           mkdir -p dist
           echo "=== Looking for APK ==="
-          find android -name "*.apk" -type f 2>/dev/null || echo "No APK found"
+          find . -name "*.apk" -type f 2>/dev/null | head -10
           
-          # Try to find APK
-          APK_PATH=""
-          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
-            APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
-          elif [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
-            APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
-          else
-            # Search anywhere
-            FOUND=$(find android -name "*.apk" -type f 2>/dev/null | head -1)
-            if [ -n "$FOUND" ]; then
-              APK_PATH="$FOUND"
-            fi
-          fi
-          
-          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
-            echo "Found APK: $APK_PATH"
-            cp "$APK_PATH" dist/AkrepIndirici-v10.9.0.apk
+          # Copy APK
+          APK=$(find android -name "*.apk" -type f 2>/dev/null | grep -v instant | head -1)
+          if [ -n "$APK" ] && [ -f "$APK" ]; then
+            cp "$APK" "dist/AkrepIndirici-v10.9.0.apk"
             ls -la dist/
           else
-            echo "ERROR: No APK found!"
-            find android -type f 2>/dev/null | head -20
+            echo "=== Checking android/app/build/outputs ==="
+            ls -la android/app/build/outputs/ 2>/dev/null || echo "No outputs dir"
+            echo "=== Log tail ==="
+            tail -80 /tmp/expo-build.log
             exit 1
           fi
 
