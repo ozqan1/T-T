@@ -11,6 +11,10 @@ jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /opt/android-sdk
+      ANDROID_SDK_ROOT: /opt/android-sdk
+      JAVA_HOME: /opt/java/openjdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,31 +34,42 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          export ANDROID_HOME=/opt/android-sdk
+          export ANDROID_SDK_ROOT=/opt/android-sdk
+          npm install
 
       - name: Generate Android native project
-        env:
-          ANDROID_HOME: /opt/android-sdk
-          ANDROID_SDK_ROOT: /opt/android-sdk
         run: |
-          echo "=== Prebuild starting ==="
-          echo "Node version: $(node --version)"
-          echo "NPM version: $(npm --version)"
+          export ANDROID_HOME=/opt/android-sdk
+          export ANDROID_SDK_ROOT=/opt/android-sdk
+          export JAVA_HOME=/opt/java/openjdk
+          echo "=== Environment ==="
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "JAVA_HOME: $JAVA_HOME"
+          echo "Node: $(node --version)"
           echo ""
-          npx expo prebuild --platform android --no-install --clean 2>&1 | tee /tmp/prebuild.log
-          echo "=== Prebuild completed ==="
-          cat /tmp/prebuild.log | tail -50
+          echo "=== Running expo prebuild ==="
+          npx expo prebuild --platform android --no-install --clean 2>&1
+          EXIT_CODE=$?
+          echo ""
+          echo "=== Prebuild exit code: $EXIT_CODE ==="
           echo ""
           echo "=== Checking android folder ==="
-          ls -la android/ 2>/dev/null || echo "No android folder!"
-          ls -la android/gradlew 2>/dev/null || echo "No gradlew!"
+          ls -la android/ 2>/dev/null || echo "ERROR: No android folder!"
+          ls -la android/gradlew 2>/dev/null || echo "ERROR: No gradlew!"
+          ls -la android/gradle/ 2>/dev/null || echo "ERROR: No gradle folder!"
           echo ""
-          echo "=== SDK check ==="
-          ls -la /opt/android-sdk/ 2>/dev/null || echo "No SDK at /opt/android-sdk/"
-          ls -la $ANDROID_HOME/ 2>/dev/null || echo "No SDK at ANDROID_HOME"
+          if [ $EXIT_CODE -ne 0 ] || [ ! -f android/gradlew ]; then
+            echo "=== PREBUILD FAILED ==="
+            exit 1
+          fi
+          echo "=== Prebuild SUCCEEDED ==="
 
       - name: Create JS bundle
         run: |
+          export ANDROID_HOME=/opt/android-sdk
+          export JAVA_HOME=/opt/java/openjdk
           mkdir -p android/app/src/main/assets
           npx react-native bundle \
             --platform android \
@@ -62,60 +77,40 @@ jobs:
             --entry-file index.js \
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res 2>&1 | tee /tmp/bundle.log
-          echo "=== Bundle result ==="
-          tail -20 /tmp/bundle.log
-          ls -la android/app/src/main/assets/ 2>/dev/null || echo "Assets dir empty"
+          EXIT_CODE=$?
+          echo "=== Bundle exit code: $EXIT_CODE ==="
+          tail -30 /tmp/bundle.log
+          ls -la android/app/src/main/assets/
 
       - name: Build with Gradle
         working-directory: android
-        env:
-          JAVA_HOME: /opt/java/openjdk
-          ANDROID_HOME: /opt/android-sdk
-          PATH: $JAVA_HOME/bin:$PATH
         run: |
-          echo "=== Checking gradlew ==="
-          ls -la gradlew
-          file gradlew
-          head -5 gradlew
-          echo ""
-          echo "=== Making gradlew executable ==="
+          export ANDROID_HOME=/opt/android-sdk
+          export ANDROID_SDK_ROOT=/opt/android-sdk
+          export JAVA_HOME=/opt/java/openjdk
+          export PATH=$JAVA_HOME/bin:$PATH
           chmod +x gradlew
-          echo ""
-          echo "=== Running gradle build ==="
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
-          EXIT_CODE=${PIPESTATUS[0]}
-          echo ""
-          echo "=== Gradle build EXIT CODE: $EXIT_CODE ==="
-          echo "=== Full log tail ==="
-          tail -200 /tmp/gradle.log
+          ./gradlew assembleDebug --no-daemon 2>&1 | tee /tmp/gradle.log
+          EXIT_CODE=$?
+          echo "=== Gradle exit code: $EXIT_CODE ==="
+          tail -100 /tmp/gradle.log
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "=== Gradle build FAILED ==="
+            echo "=== GRADLE BUILD FAILED ==="
             exit 1
           fi
-          echo "=== Gradle build SUCCEEDED ==="
 
       - name: Find and copy APK
         run: |
           mkdir -p dist
-          echo "=== Checking all outputs ==="
-          find android -name "*.apk" -type f 2>/dev/null || echo "No APK found"
-          echo ""
-          echo "=== Checking standard paths ==="
-          ls -la android/app/build/outputs/apk/ 2>/dev/null || echo "No apk dir"
-          ls -la android/app/build/outputs/apk/debug/ 2>/dev/null || echo "No debug dir"
-          ls -la android/app/build/outputs/apk/release/ 2>/dev/null || echo "No release dir"
-          
-          # Copy APK
+          find android -name "*.apk" -type f
           if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
             cp android/app/build/outputs/apk/debug/app-debug.apk dist/AkrepIndirici-v10.9.0.apk
           elif [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
             cp android/app/build/outputs/apk/release/app-release.apk dist/AkrepIndirici-v10.9.0.apk
           else
-            echo "=== Listing all files in build dir ==="
-            find android/app/build -type f 2>/dev/null | head -50
+            echo "=== No APK found! ==="
             exit 1
           fi
-          echo "=== APK copied ==="
           ls -la dist/
 
       - name: Upload APK
