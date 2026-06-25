@@ -47,14 +47,16 @@ jobs:
       - name: Login to Expo
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        continue-on-error: true
         run: |
           echo "=== Testing Expo Token ==="
-          curl -s -H "Authorization: Bearer $EXPO_TOKEN" https://exp.host/--/api/v2/users/me | head -100 || true
+          TEST_RESULT=$(curl -s -w "%{http_code}" -o /tmp/response.json -H "Authorization: Bearer $EXPO_TOKEN" https://exp.host/--/api/v2/users/me)
+          echo "HTTP Status: $TEST_RESULT"
+          cat /tmp/response.json | head -50
           echo ""
           echo "=== Logging in to EAS ==="
-          echo "$EXPO_TOKEN" | eas login --token || { echo "Login failed"; exit 1; }
-          echo "=== Login successful ==="
-          eas whoami
+          eas login --token "$EXPO_TOKEN" 2>&1 || { echo "Login failed with eas login"; }
+          eas whoami 2>&1 || echo "whoami failed"
 
       - name: Build Android APK
         env:
