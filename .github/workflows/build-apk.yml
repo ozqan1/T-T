@@ -58,16 +58,11 @@ jobs:
           
           mkdir -p android/app/src/main/assets
           
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res 2>&1 | tee /tmp/bundle.log
+          npx expo export:embed --platform android --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res 2>&1 | tee /tmp/bundle.log
           
           EXIT_CODE=${PIPESTATUS[0]}
           echo "=== Bundle exit code: $EXIT_CODE ==="
-          tail -20 /tmp/bundle.log
+          tail -30 /tmp/bundle.log
           
           [ -f android/app/src/main/assets/index.android.bundle ] && echo "✅ Bundle created!" || { echo "❌ Bundle failed!"; exit 1; }
 
