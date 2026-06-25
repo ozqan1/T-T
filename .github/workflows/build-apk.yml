@@ -96,19 +96,28 @@ jobs:
           
           chmod +x gradlew
           
+          echo "=== Listing gradle tasks ==="
+          ./gradlew tasks --no-daemon 2>&1 | head -50
+          
+          echo ""
           echo "=== Building Debug APK ==="
-          ./gradlew assembleDebug --no-daemon --warning-mode all 2>&1 | tee /tmp/gradle.log
+          ./gradlew assembleDebug --no-daemon --warning-mode all --stacktrace 2>&1 | tee /tmp/gradle.log
           
           EXIT_CODE=${PIPESTATUS[0]}
           echo ""
           echo "=== Gradle exit code: $EXIT_CODE ==="
-          echo "=== Last 100 lines ==="
-          tail -100 /tmp/gradle.log
+          echo "=== Last 150 lines ==="
+          tail -150 /tmp/gradle.log
           
           if [ $EXIT_CODE -ne 0 ]; then
             echo "=== GRADLE BUILD FAILED ==="
             exit 1
           fi
+          
+          echo "=== Checking outputs ==="
+          find . -name "*.apk" -type f 2>/dev/null
+          ls -la app/build/outputs/apk/ 2>/dev/null || echo "No apk dir"
+          ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "No debug dir"
 
       - name: Find APK
         run: |
