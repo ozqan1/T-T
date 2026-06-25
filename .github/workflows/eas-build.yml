@@ -2,7 +2,6 @@ name: EAS Build Android APK
 
 on:
   push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -12,7 +11,7 @@ jobs:
   build:
     name: Build APK with EAS
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # 6 hours for EAS build
+    timeout-minutes: 360
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,7 +19,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install EAS CLI
         run: npm install -g eas-cli
@@ -50,7 +49,6 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          echo "Logging in with token..."
           eas login --token "$EXPO_TOKEN" 2>&1
           eas whoami
 
@@ -64,30 +62,12 @@ jobs:
           echo "=== EAS Build Exit Code: $EXIT_CODE ==="
           tail -100 /tmp/eas.log
 
-      - name: Download APK from Expo
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: |
-          mkdir -p dist
-          echo "=== Getting build details ==="
-          eas build:list --limit 1 --status finished 2>&1 | tee /tmp/build-list.log
-          
-          # Get build ID from output
-          BUILD_ID=$(grep -oP 'build-[a-z0-9]+' /tmp/build-list.log | head -1 || echo "")
-          echo "Build ID: $BUILD_ID"
-          
-          # Download APK if available
-          if [ -n "$BUILD_ID" ]; then
-            echo "=== Downloading APK ==="
-            eas build:download --id "$BUILD_ID" 2>&1 || echo "Download skipped"
-          fi
-
       - name: Create Release
         if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v10.9.0-eas
           name: TİT Akrep İndirici v10.9.0 APK (EAS)
-          body: "EAS Build ile oluşturuldu."
+          body: "EAS Build ile oluşturuldu. APK: https://expo.dev/accounts/akrepp11/projects"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
