@@ -57,20 +57,33 @@ jobs:
           JAVA_HOME: /opt/java/openjdk
           ANDROID_HOME: /opt/android-sdk
         run: |
-          ./gradlew assembleRelease --no-daemon --warning-mode all 2>&1 | tee /tmp/gradle.log
+          ./gradlew assembleDebug --no-daemon --warning-mode all 2>&1 | tee /tmp/gradle.log
           echo "=== Gradle build result ==="
           tail -80 /tmp/gradle.log
 
       - name: Find and copy APK
         run: |
           mkdir -p dist
-          echo "=== Checking outputs ==="
-          ls -la android/app/build/outputs/apk/release/ 2>/dev/null && \
-            cp android/app/build/outputs/apk/release/app-release.apk dist/AkrepIndirici-v10.9.0.apk || \
-          (echo "No release APK, checking debug..." && \
-           ls -la android/app/build/outputs/apk/debug/ 2>/dev/null && \
-           cp android/app/build/outputs/apk/debug/app-debug.apk dist/AkrepIndirici-v10.9.0.apk) || \
-          (echo "=== Last 100 lines of gradle log ===" && tail -100 /tmp/gradle.log && exit 1)
+          echo "=== Checking all outputs ==="
+          find android -name "*.apk" -type f 2>/dev/null
+          echo ""
+          echo "=== Checking standard paths ==="
+          ls -la android/app/build/outputs/apk/ 2>/dev/null || echo "No apk dir"
+          ls -la android/app/build/outputs/apk/debug/ 2>/dev/null || echo "No debug dir"
+          ls -la android/app/build/outputs/apk/release/ 2>/dev/null || echo "No release dir"
+          
+          # Copy APK
+          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk dist/AkrepIndirici-v10.9.0.apk
+          elif [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk dist/AkrepIndirici-v10.9.0.apk
+          else
+            echo "=== Last 200 lines of gradle log ==="
+            tail -200 /tmp/gradle.log
+            echo "=== Listing all files in build dir ==="
+            find android/app/build -type f 2>/dev/null | head -30
+            exit 1
+          fi
           echo "=== APK copied ==="
           ls -la dist/
 
