@@ -59,22 +59,24 @@ jobs:
           cd android
           chmod +x gradlew
           
-          # Build directly
-          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
+          # Build Debug APK
+          ./gradlew assembleDebug --no-daemon 2>&1 | tee /tmp/gradle.log
           EXIT_CODE=${PIPESTATUS[0]}
-          
+
           echo "=== Build result: $EXIT_CODE ==="
-          tail -100 /tmp/gradle.log
+
+          # Check for APK
+          echo "=== Searching APKs ==="
+          find . -name "*.apk" -type f 2>/dev/null
+          ls -laR app/build/outputs/ 2>/dev/null | head -50
 
       - name: Find APK
         run: |
           mkdir -p dist
-          
-          # Find all APKs
+
           echo "=== Searching for APKs ==="
           find android -name "*.apk" -type f 2>/dev/null
-          
-          # Copy first found APK
+
           APK=$(find android -name "*.apk" -type f | head -1)
           if [ -n "$APK" ] && [ -f "$APK" ]; then
             cp "$APK" dist/AkrepIndirici-v10.9.0.apk
