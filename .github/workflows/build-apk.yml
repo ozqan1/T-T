@@ -1,4 +1,4 @@
-name: Build Android APK (RN CLI)
+name: Build Android APK
 
 on:
   push:
@@ -34,119 +34,57 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install dependencies
-        run: |
-          npm install
+        run: npm install
 
-      - name: Generate Android native project
+      - name: Generate Android project
         run: |
           export ANDROID_HOME=/opt/android-sdk
           export ANDROID_SDK_ROOT=/opt/android-sdk
           export JAVA_HOME=/opt/java/openjdk
           export PATH=$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
           
-          echo "=== Node version: $(node --version) ==="
-          echo "=== Java version: $(java -version 2>&1 | head -1) ==="
-          echo "=== Android SDK: $ANDROID_HOME ==="
-          echo ""
-          
-          # Run expo prebuild
           npx expo prebuild --platform android --no-install --clean 2>&1 | tee /tmp/prebuild.log
           EXIT_CODE=${PIPESTATUS[0]}
+          tail -30 /tmp/prebuild.log
           
-          echo ""
-          echo "=== Prebuild exit code: $EXIT_CODE ==="
-          tail -50 /tmp/prebuild.log
-          
-          # Verify android folder
-          echo ""
-          echo "=== Checking android folder ==="
-          ls -la android/ 2>/dev/null || { echo "ERROR: No android folder!"; exit 1; }
-          ls -la android/gradlew 2>/dev/null || { echo "ERROR: No gradlew!"; exit 1; }
-          
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "=== PREBUILD FAILED ==="
-            exit 1
-          fi
-          echo "=== Prebuild SUCCEEDED ==="
+          [ -f android/gradlew ] && echo "✅ Prebuild OK" || { echo "❌ Prebuild FAILED"; exit 1; }
 
-      - name: Create JS bundle
-        run: |
-          mkdir -p android/app/src/main/assets
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res 2>&1 | tee /tmp/bundle.log
-          
-          EXIT_CODE=${PIPESTATUS[0]}
-          echo "=== Bundle exit code: $EXIT_CODE ==="
-          tail -30 /tmp/bundle.log
-          
-          ls -la android/app/src/main/assets/
-          [ -f android/app/src/main/assets/index.android.bundle ] && echo "Bundle created!" || echo "Bundle NOT found!"
-
-      - name: Build Debug APK
-        working-directory: android
+      - name: Build APK
         run: |
           export ANDROID_HOME=/opt/android-sdk
           export ANDROID_SDK_ROOT=/opt/android-sdk
           export JAVA_HOME=/opt/java/openjdk
           export PATH=$JAVA_HOME/bin:$PATH
           
+          cd android
           chmod +x gradlew
           
-          echo "=== Listing gradle tasks ==="
-          ./gradlew tasks --no-daemon 2>&1 | head -50
-          
-          echo ""
-          echo "=== Building Debug APK ==="
-          ./gradlew assembleDebug --no-daemon --warning-mode all --stacktrace 2>&1 | tee /tmp/gradle.log
-          
+          # Build directly
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
           EXIT_CODE=${PIPESTATUS[0]}
-          echo ""
-          echo "=== Gradle exit code: $EXIT_CODE ==="
-          echo "=== Last 150 lines ==="
-          tail -150 /tmp/gradle.log
           
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "=== GRADLE BUILD FAILED ==="
-            exit 1
-          fi
-          
-          echo "=== Checking outputs ==="
-          find . -name "*.apk" -type f 2>/dev/null
-          ls -la app/build/outputs/apk/ 2>/dev/null || echo "No apk dir"
-          ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "No debug dir"
+          echo "=== Build result: $EXIT_CODE ==="
+          tail -100 /tmp/gradle.log
 
       - name: Find APK
         run: |
           mkdir -p dist
-          echo "=== Searching for APK ==="
+          
+          # Find all APKs
+          echo "=== Searching for APKs ==="
           find android -name "*.apk" -type f 2>/dev/null
           
-          APK_PATH=""
-          for path in \
-            "android/app/build/outputs/apk/debug/app-debug.apk" \
-            "android/app/build/outputs/apk/debug/*.apk" \
-            "android/app/build/outputs/**/*.apk"; do
-            if [ -f "$path" ]; then
-              APK_PATH="$path"
-              break
-            fi
-          done
-          
-          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
-            echo "Found: $APK_PATH"
-            cp "$APK_PATH" dist/AkrepIndirici-v10.9.0.apk
+          # Copy first found APK
+          APK=$(find android -name "*.apk" -type f | head -1)
+          if [ -n "$APK" ] && [ -f "$APK" ]; then
+            cp "$APK" dist/AkrepIndirici-v10.9.0.apk
             ls -la dist/
+            echo "✅ APK ready: $APK"
           else
-            echo "=== Listing build outputs ==="
-            find android/app/build/outputs -type f 2>/dev/null | head -50
-            echo "=== No APK found! ==="
+            echo "❌ No APK found!"
+            find android/app/build -type f 2>/dev/null | head -30
             exit 1
           fi
-          echo "=== APK found and copied! ==="
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
