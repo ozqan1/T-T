@@ -19,13 +19,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
-      - name: Setup EAS CLI
-        run: npm install -g eas-cli
-
-      - name: Install dependencies
-        run: npm install
+      - name: Install EAS CLI and Expo deps
+        run: |
+          npm install -g eas-cli
+          npm install
 
       - name: Configure EAS
         run: |
@@ -46,25 +45,33 @@ jobs:
           EOF
 
       - name: Login to Expo
-        run: eas login --token ${{ secrets.EXPO_TOKEN }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          echo "=== Testing Expo Token ==="
+          curl -s -H "Authorization: Bearer $EXPO_TOKEN" https://exp.host/--/api/v2/users/me | head -100 || true
+          echo ""
+          echo "=== Logging in to EAS ==="
+          echo "$EXPO_TOKEN" | eas login --token || { echo "Login failed"; exit 1; }
+          echo "=== Login successful ==="
+          eas whoami
 
       - name: Build Android APK
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           echo "=== Starting EAS Build ==="
           eas build --platform android --profile preview --non-interactive 2>&1 | tee /tmp/eas.log
-          EXIT_CODE=$?
+          EXIT_CODE=${PIPESTATUS[0]}
           echo ""
           echo "=== EAS Build Exit Code: $EXIT_CODE ==="
           tail -100 /tmp/eas.log
+          
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "=== Build started successfully ==="
+            eas build:list --limit 1
+          fi
           exit $EXIT_CODE
-
-      - name: Get Build Info
-        run: |
-          echo "=== Getting build information ==="
-          eas build:list --limit 1
-          echo ""
-          echo "=== If build succeeded, download with: ==="
-          echo "eas build:download --latest --platform android"
 
       - name: Create Release
         if: success()
