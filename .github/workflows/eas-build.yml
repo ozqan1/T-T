@@ -1,0 +1,115 @@
+name: EAS Build Android APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Configure EAS Build
+        run: |
+          cat > eas.json << 'EOF'
+          {
+            "cli": {
+              "version": ">= 5.0.0"
+            },
+            "build": {
+              "development": {
+                "developmentClient": true,
+                "distribution": "internal"
+              },
+              "preview": {
+                "distribution": "internal",
+                "android": {
+                  "buildType": "apk"
+                }
+              },
+              "production": {
+                "android": {
+                  "buildType": "apk"
+                }
+              }
+            },
+            "submit": {
+              "android": {}
+            }
+          }
+          EOF
+          cat eas.json
+
+      - name: Build with EAS
+        run: |
+          echo "=== Building with EAS ==="
+          eas build --platform android --profile preview --non-interactive --no-wait
+          echo "=== Build started! ==="
+
+      - name: Wait for EAS build
+        run: |
+          echo "=== Waiting for build to complete ==="
+          BUILD_ID=$(eas build:list --limit 1 --json 2>/dev/null | python3 -c "import sys,json; data=json.load(sys.stdin); print(data[0]['id'] if data else '')" || echo "")
+          echo "Build ID: $BUILD_ID"
+          
+          # Poll for build status
+          for i in {1..60}; do
+            STATUS=$(eas build:list --limit 1 --json 2>/dev/null | python3 -c "import sys,json; data=json.load(sys.stdin); print(data[0]['status'] if data else 'UNKNOWN')" || echo "UNKNOWN")
+            echo "Status: $STATUS (attempt $i/60)"
+            if [ "$STATUS" = "finished" ]; then
+              echo "=== Build finished! ==="
+              break
+            elif [ "$STATUS" = "errored" ]; then
+              echo "=== Build failed! ==="
+              exit 1
+            fi
+            sleep 60
+          done
+
+      - name: Download APK
+        run: |
+          echo "=== Getting APK URL ==="
+          # Get build details
+          BUILD_JSON=$(eas build:list --limit 1 --json)
+          echo "$BUILD_JSON" | python3 -c "
+import sys,json
+data = json.load(sys.stdin)
+if data:
+    build = data[0]
+    print(f'Build ID: {build.get(\"id\")}')
+    print(f'Status: {build.get(\"status\")}')
+    artifacts = build.get('artifacts', {})
+    if artifacts:
+        print(f'APK URL: {artifacts.get(\"url\", \"Not available\")}')
+    else:
+        print('No artifacts yet')
+"
+
+      - name: Create Release with APK
+        if: success()
+        run: |
+          echo "=== Creating GitHub Release ==="
+          eas build:list --limit 1
+          echo ""
+          echo "Build completed! Please download the APK from EAS:"
+          echo "1. Go to https://expo.dev/accounts/ozqan1/projects"
+          echo "2. Download your build APK"
+          echo ""
+          echo "Or run: eas build:download --latest"
