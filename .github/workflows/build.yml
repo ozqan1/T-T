@@ -1,0 +1,27 @@
+name: Build Android APK
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Fix package name
+        run: |
+          sed -i 's/package com.tit/package com.nebiozkan.akrep/' android/app/src/main/java/com/nebiozkan/akrep/MainActivity.kt 2>/dev/null || true
+          sed -i 's/package com.tit/package com.nebiozkan.akrep/' android/app/src/main/java/com/nebiozkan/akrep/MainApplication.kt 2>/dev/null || true
+      - name: Build APK
+        run: cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AkrepIndirici-v10.9.0
+          path: android/app/build/outputs/apk/debug/app-debug.apk
