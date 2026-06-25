@@ -102,16 +102,27 @@ jobs:
       - name: Find and copy APK
         run: |
           mkdir -p dist
-          find android -name "*.apk" -type f
-          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp android/app/build/outputs/apk/debug/app-debug.apk dist/AkrepIndirici-v10.9.0.apk
-          elif [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
-            cp android/app/build/outputs/apk/release/app-release.apk dist/AkrepIndirici-v10.9.0.apk
-          else
-            echo "=== No APK found! ==="
-            exit 1
-          fi
-          ls -la dist/
+          echo "=== Searching for APK ==="
+          # Search everywhere in android folder
+          find android -name "*.apk" -type f 2>/dev/null
+          echo ""
+          # Check common paths
+          for path in \
+            "android/app/build/outputs/apk/debug/app-debug.apk" \
+            "android/app/build/outputs/apk/release/app-release.apk" \
+            "android/app/build/outputs/**/app-debug.apk" \
+            "android/app/build/outputs/**/app-release-unsigned.apk"; do
+            if [ -f "$path" ]; then
+              echo "Found APK at: $path"
+              cp "$path" dist/AkrepIndirici-v10.9.0.apk
+              ls -la dist/
+              exit 0
+            fi
+          done
+          echo "=== No APK found in standard paths! ==="
+          echo "=== Listing build directory ==="
+          find android/app/build -type f 2>/dev/null | head -30
+          exit 1
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
