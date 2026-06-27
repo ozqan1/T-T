@@ -1,0 +1,73 @@
+name: EAS Build Android APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build APK with EAS
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Configure EAS
+        run: |
+          cat > eas.json << 'EOF'
+          {
+            "cli": {
+              "version": ">= 5.0.0"
+            },
+            "build": {
+              "preview": {
+                "distribution": "internal",
+                "android": {
+                  "buildType": "apk"
+                }
+              }
+            }
+          }
+          EOF
+
+      - name: Login to Expo
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas login --token "$EXPO_TOKEN" 2>&1
+          eas whoami
+
+      - name: Build Android APK with EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          echo "=== Starting EAS Build ==="
+          eas build --platform android --profile preview --non-interactive 2>&1 | tee /tmp/eas.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "=== EAS Build Exit Code: $EXIT_CODE ==="
+          tail -100 /tmp/eas.log
+
+      - name: Create Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v10.9.0-eas
+          name: TİT Akrep İndirici v10.9.0 APK (EAS)
+          body: "EAS Build ile oluşturuldu. APK: https://expo.dev/accounts/akrepp11/projects"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
